@@ -50,7 +50,7 @@ type VM struct {
 }
 
 type Op struct {
-	C, B, A Mode // order not by spec!
+	C, B, A Mode // order not matching spec!
 	DE      Instr
 }
 
@@ -118,7 +118,7 @@ func (vm VM) step() VM {
 		return vm
 	case Out:
 		v := p.At(pos+1, op.A)
-		fmt.Print(v)
+		//fmt.Print(v)
 		vm.out = append(vm.out, v)
 		vm.pos += 2
 		return vm
@@ -187,11 +187,6 @@ func loadIntProg(path string) IntProg {
 
 func (vm VM) run() VM {
 	for vm.state == Running {
-		//if len(vm.p) < int(pos+4) {
-		//fmt.Printf("//%d %v\n", pos, p[pos:len(p)])
-		//} else {
-		//fmt.Printf("//%d %v\n", pos, p[pos:pos+4])
-		//}
 		vm = vm.step()
 	}
 
@@ -203,17 +198,90 @@ func (vm VM) run() VM {
 
 }
 
+func getPerms(v [5]int, i int) [][5]int {
+	acc := make([][5]int, 0)
+	if i > 4 {
+		acc = append(acc, v)
+		return acc
+	}
+
+	acc = append(acc, getPerms(v, i+1)...)
+	for j := i + 1; j < len(v); j++ {
+		w := v
+		w[i] = v[j]
+		w[j] = v[i]
+		acc = append(acc, getPerms(w, i+1)...)
+	}
+	return acc
+}
+
 func main() {
 	prog := loadIntProg(os.Args[1])
-	in := make([]int, 1)
-	in[0] = 1
-	vm := VM{prog.Clone(), Position(0), Running, in, make([]int, 0)}
-	vm = vm.run()
-	fmt.Println("\nResult1:", vm.out[len(vm.out)-1])
 
-	in = make([]int, 1)
-	in[0] = 5
-	vm = VM{prog.Clone(), Position(0), Running, in, make([]int, 0)}
-	vm = vm.run()
-	fmt.Println("\nResult2:", vm.out[len(vm.out)-1])
+	perms := getPerms([5]int{0, 1, 2, 3, 4}, 0)
+	maxSignal := 0
+	for _, perm := range perms {
+		signal := 0
+		for i := 0; i < 5; i++ {
+			phase := perm[i]
+
+			in := make([]int, 0)
+			in = append(in, phase)
+			in = append(in, signal)
+			vm := VM{prog.Clone(), Position(0), Running, in, make([]int, 0)}
+
+			vm = vm.run()
+
+			signal = vm.out[len(vm.out)-1]
+		}
+
+		if signal > maxSignal {
+			maxSignal = signal
+		}
+	}
+
+	fmt.Println("Result1:", maxSignal)
+
+	perms = getPerms([5]int{0, 1, 2, 3, 4}, 0)
+	maxSignal = 0
+	for _, perm := range perms {
+		signal := 0
+
+		vms := make([]VM, 0, 5)
+		for i := 0; i < 5; i++ {
+			in := make([]int, 0)
+			in = append(in, perm[i]+5) // phase
+			out := make([]int, 0)
+			vms = append(vms, VM{prog.Clone(), Position(0), Running, in, out})
+		}
+
+		vms[0].in = append(vms[0].in, signal) //input signal
+
+		i := 0
+		for {
+			vm := vms[i]
+			for vm.state == Running && len(vm.out) < 1 {
+				vm = vm.step()
+			}
+			vms[i] = vm
+
+			if vm.state == Halted {
+				signal = vms[4].out[0]
+				break
+			} else if vm.state == Error {
+				panic("ops")
+			}
+
+			j := (i + 1) % 5
+			vms[j].in = append(vms[j].in, vm.out[len(vm.out)-1])
+			vms[j].out = make([]int, 0)
+			i = j
+		}
+
+		if signal > maxSignal {
+			maxSignal = signal
+		}
+	}
+
+	fmt.Println("Result2:", maxSignal)
 }
