@@ -26,6 +26,10 @@ const (
 	RelativeMode  Mode = 2
 )
 
+func (mode Mode) String() string {
+	return [3]string{"Pos", "Imm", "Rel"}[mode]
+}
+
 type Instr int
 
 const (
@@ -40,6 +44,13 @@ const (
 	AdjRelBase Instr = 9
 	Halt       Instr = 99
 )
+
+func (instr Instr) String() string {
+	if instr == 99 {
+		return "Halt"
+	}
+	return [11]string{"???", "Add", "Mul", "In", "Out", "JmpTrue", "JmpFalse", "LessThan", "Equals", "AdjRelBase"}[instr]
+}
 
 type IntProg []int
 
@@ -72,42 +83,58 @@ func (p IntProg) Clone() IntProg {
 	return newp
 }
 
-func (vm VM) Read(pos Position, mode Mode) int {
+func (prog IntProg) At(pos Position) int {
+	if len(prog) <= int(pos) {
+		return 0
+	}
+	return prog[pos]
+}
+
+func (vm *VM) EnsureMemory(pos Position) IntProg {
+	if len(vm.prog) <= int(pos) {
+		newprog := make([]int, pos+5000)
+		copy(newprog, vm.prog)
+		return newprog
+	}
+	return vm.prog
+}
+
+func (vm *VM) Read(pos Position, mode Mode) int {
 	prog := vm.prog
 	switch mode {
 	case PositionMode:
-		return prog[prog[pos]]
+		return prog.At(
+			Position(prog.At(pos)))
 	case ImmediateMode:
-		return prog[pos]
+		return prog.At(pos)
 	case RelativeMode:
-		return prog[vm.rbase+pos]
+		return prog.At(vm.rbase + Position(prog.At(pos)))
 	}
 	panic("ops")
 }
 
-func (vm VM) Write(pos Position, mode Mode, v int) {
-	prog := vm.prog
-	fmt.Println(pos, mode, v)
+func (vm *VM) Write(pos Position, mode Mode, v int) {
 	switch mode {
 	case PositionMode:
-		prog[prog[pos]] = v
+		vm.prog = vm.EnsureMemory(Position(vm.prog.At(pos)))
+		vm.prog[vm.prog.At(pos)] = v
 		return
-	//case ImmediateMode:
-	//	panic("illegal")
-	//	prog[pos] = v
 	case RelativeMode:
-		prog[vm.rbase+pos] = v
+		vm.prog = vm.EnsureMemory(vm.rbase + Position(vm.prog.At(pos)))
+		vm.prog[vm.rbase+Position(vm.prog.At(pos))] = v
 		return
 	}
 	panic("ops")
 }
 
-func (vm VM) step() VM {
+func (vm *VM) step() *VM {
 	pos := vm.pos
-	cur := vm.prog[pos]
+	cur := vm.prog.At(pos)
 	op := extractOp(cur)
 
-	fmt.Println(op, vm.prog[pos:pos+4])
+	//next := [4]int{vm.prog.At(pos), vm.prog.At(pos+1), vm.prog.At(pos+2), vm.prog.At(pos+3) }
+	//fmt.Printf("//%v %v %v [%v]\n", vm.pos, vm.rbase, next, vm.prog.At(1000))
+	//fmt.Printf("//%v %v(%v) %v(%v) %v(%v)\n", op.DE, op.A, next[1], op.B, next[2], op.C, next[3])
 	switch op.DE {
 	case Add:
 		a := vm.Read(pos+1, op.A)
@@ -140,7 +167,7 @@ func (vm VM) step() VM {
 		return vm
 	case Out:
 		v := vm.Read(pos+1, op.A)
-		//fmt.Print(v)
+		fmt.Print(v)
 		vm.out = append(vm.out, v)
 		vm.pos += 2
 		return vm
@@ -212,7 +239,7 @@ func loadIntProg(path string) IntProg {
 	return prog
 }
 
-func (vm VM) run() VM {
+func (vm *VM) run() *VM {
 	for vm.state == Running {
 		vm = vm.step()
 	}
@@ -225,47 +252,16 @@ func (vm VM) run() VM {
 
 }
 
-func getPerms(v [5]int, i int) [][5]int {
-	acc := make([][5]int, 0)
-	if i > 4 {
-		acc = append(acc, v)
-		return acc
-	}
-
-	acc = append(acc, getPerms(v, i+1)...)
-	for j := i + 1; j < len(v); j++ {
-		w := v
-		w[i] = v[j]
-		w[j] = v[i]
-		acc = append(acc, getPerms(w, i+1)...)
-	}
-	return acc
-}
-
 func main() {
 	prog := loadIntProg(os.Args[1])
+	in := make([]int, 1)
+	in[0] = 1
+	vm := &VM{prog.Clone(), Position(0), Position(0), Running, in, make([]int, 0)}
+	vm.run()
+	fmt.Println("\nResult1:", vm.out[len(vm.out)-1])
 
-	perms := getPerms([5]int{0, 1, 2, 3, 4}, 0)
-	maxSignal := 0
-	for _, perm := range perms {
-		signal := 0
-		for i := 0; i < 5; i++ {
-			phase := perm[i]
-
-			in := make([]int, 0)
-			in = append(in, phase)
-			in = append(in, signal)
-			vm := VM{prog.Clone(), Position(0), Position(0), Running, in, make([]int, 0)}
-
-			vm = vm.run()
-
-			signal = vm.out[len(vm.out)-1]
-		}
-
-		if signal > maxSignal {
-			maxSignal = signal
-		}
-	}
-
-	fmt.Println("Result1:", maxSignal)
+	in[0] = 2
+	vm = &VM{prog.Clone(), Position(0), Position(0), Running, in, make([]int, 0)}
+	vm.run()
+	fmt.Println("\nResult2:", vm.out[len(vm.out)-1])
 }
