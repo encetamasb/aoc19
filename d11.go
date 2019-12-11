@@ -106,7 +106,6 @@ func main() {
 	m[curPos] = 1
 
 	for vm.State == Running {
-		fmt.Println("POS", curPos)
 		v, ok := m[curPos]
 		if !ok {
 			v = 0
@@ -123,5 +122,6 @@ func main() {
 		curPos = Pair{curPos.x + off.x, curPos.y + off.y}
 	}
 
-	show(m, 0, 0, 40, 1)
+	fmt.Println("Result2:")
+	show(m, 0, 0, 40, 8)
 }
