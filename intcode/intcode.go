@@ -53,12 +53,9 @@ func (instr Instr) String() string {
 
 type IntProg []int
 
-type Output interface {
-	Write(int) bool
-}
-
-type Input interface {
-	Read() (int, bool)
+type IO interface {
+	Send(int) bool
+	Receive() (int, bool)
 }
 
 type VM struct {
@@ -66,8 +63,7 @@ type VM struct {
 	Pos   Position
 	Rbase Position
 	State State
-	In    Input
-	Out   Output
+	Io    IO
 }
 
 type Op struct {
@@ -140,7 +136,7 @@ func (vm *VM) Step() *VM {
 	op := extractOp(cur)
 
 	//next := [4]int{vm.Prog.At(pos), vm.Prog.At(pos+1), vm.Prog.At(pos+2), vm.Prog.At(pos+3) }
-	//fmt.Printf("//%v %v %v [%v]\n", vm.pos, vm.rbase, next, vm.Prog.At(1000))
+	//fmt.Printf("//%v %v %v [%v]\n", vm.Pos, vm.Rbase, next, vm.Prog.At(1000))
 	//fmt.Printf("//%v %v(%v) %v(%v) %v(%v)\n", op.DE, op.A, next[1], op.B, next[2], op.C, next[3])
 	switch op.DE {
 	case Add:
@@ -157,7 +153,7 @@ func (vm *VM) Step() *VM {
 		return vm
 	case In:
 		var n int
-		n, ok := vm.In.Read()
+		n, ok := vm.Io.Receive()
 		if !ok {
 			vm.State = Error
 			return vm
@@ -168,7 +164,7 @@ func (vm *VM) Step() *VM {
 	case Out:
 		v := vm.Read(pos+1, op.A)
 		//fmt.Print(v)
-		ok := vm.Out.Write(v)
+		ok := vm.Io.Send(v)
 		if !ok {
 			vm.State = Error
 			return vm
@@ -256,21 +252,37 @@ func (vm *VM) Run() *VM {
 
 }
 
-type ChannelInput struct {
-	Ch <-chan int
+type ChannelIO struct {
+	In  <-chan int
+	Out chan<- int
 }
 
-func (o ChannelInput) Read() (int, bool) {
-	n, ok := <-o.Ch
+func (io ChannelIO) Receive() (int, bool) {
+	n, ok := <-io.In
 	return n, ok
 }
 
-type ChannelOutput struct {
-	Ch chan<- int
+func (io ChannelIO) Send(v int) bool {
+	io.Out <- v
+	// lazy :)
+	return true
 }
 
-func (o ChannelOutput) Write(n int) bool {
-	o.Ch <- n
-	// lazy :)
+type ListIO struct {
+	In  []int
+	Out []int
+}
+
+func (io ListIO) Receive() (int, bool) {
+	if len(io.In) < 1 {
+		return 0, false
+	}
+	v := io.In[0]
+	io.In = io.In[1:]
+	return v, true
+}
+
+func (io ListIO) Send(v int) bool {
+	io.Out = append(io.Out, v)
 	return true
 }
