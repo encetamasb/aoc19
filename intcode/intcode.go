@@ -56,6 +56,7 @@ type IntProg []int
 type IO interface {
 	Send(int) bool
 	Receive() (int, bool)
+	Finished()
 }
 
 type VM struct {
@@ -217,10 +218,12 @@ func (vm *VM) Step() *VM {
 	case Halt:
 		vm.Pos += 1
 		vm.State = Halted
+		vm.Io.Finished()
 		return vm
 	}
 
 	vm.State = Error
+	vm.Io.Finished()
 	return vm
 }
 
@@ -268,6 +271,10 @@ func (io ChannelIO) Send(v int) bool {
 	return true
 }
 
+func (io ChannelIO) Finished() {
+	close(io.Out)
+}
+
 type ListIO struct {
 	In  []int
 	Out []int
@@ -285,4 +292,7 @@ func (io ListIO) Receive() (int, bool) {
 func (io ListIO) Send(v int) bool {
 	io.Out = append(io.Out, v)
 	return true
+}
+
+func (io ListIO) Finished() {
 }
