@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sort"
 )
 
 type Rotation int
@@ -130,7 +131,7 @@ type Step struct {
 }
 
 func (s Step) String() string {
-	return [2]string{"R", "L"}[s.r] + strconv.Itoa(s.n)
+	return [2]string{"R", "L"}[s.r] + "," + strconv.Itoa(s.n)
 }
 
 type Steps []Step
@@ -143,7 +144,7 @@ func (steps Steps) String() string {
 	return strings.Join(m, ",")
 }
 
-func Follow(m Map, curp Pair) []Step {
+func Follow(m Map, curp Pair) Steps {
 	curd := Up
 	curr := CW
 
@@ -179,14 +180,80 @@ func Follow(m Map, curp Pair) []Step {
 	return steps
 }
 
-//func (steps Steps) AsSuffixTree() SuffixTree {
-//}
-//
-//type SuffixTree struct {
-//	step Step
-//	cnt int
-//	to map[Step]*SuffixTree
-//}
+
+func buildWin(steps Steps, offset int, maxLen int, maxSLen int) Steps {
+	win := make(Steps, 0)
+	size := 0
+	for i := offset; i < len(steps); i ++{
+		s := steps[i]
+		if len(win) < maxLen && size + 1 + len(s.String()) < maxSLen {
+			win = append(win, s)
+			size = len(win.String()) 
+		} else {
+			break
+		}
+	}
+	return win 
+	
+}
+
+func (steps Steps) FindABC(maxlen int) (string, string, string, string) {
+	m := make(map[string]int)
+
+	// Let's create a pattern/occurence map
+	// (decreasing elem count, constant max pattern string length)
+	for max := len(steps); max > 1; max -- {
+		i := 0
+		for i < len(steps) {
+			w := buildWin(steps, i, max, maxlen + 1)
+			if len(w) == max {
+				m[w.String()] += 1
+			}
+			i += 1
+		}
+	}
+	
+	type Rec struct {
+		s string
+		cnt int
+	}
+
+	c := make([]Rec, 0)
+	for k, v := range m {
+		c = append(c, Rec{k, v})
+	}
+
+	sort.Slice(c, func(i, j int) bool {
+		// Longer or more frequent to the front!
+		return !(len(c[i].s) < len(c[j].s) || (c[i].cnt < c[j].cnt && len(c[i].s) == len(c[j].s)))
+	})
+
+	whole := steps.String()
+	minln := 999999
+	var mina, minb, minc Rec 
+	var mincur string
+	// Check every combinations of A B C
+	for i := 0; i < len(c)-2; i ++ {
+		for j := i + 1; j < len(c)-1; j++ {
+			for k := j + 1; k < len(c); k ++ {
+				cur := whole
+				a, b, c := c[i], c[j], c[k]
+				cur = strings.ReplaceAll(cur, a.s, "A")
+				cur = strings.ReplaceAll(cur, b.s, "B")
+				cur = strings.ReplaceAll(cur, c.s, "C")
+				// Replacing with winning a b c triplet should result in smallest main routine 
+				if minln > len(cur) {
+					minln = len(cur)
+					mina, minb, minc = a, b, c
+					mincur = cur
+				}
+			}
+		}
+	}
+	// Let's hope for the best
+	return mincur, mina.s, minb.s, minc.s
+}
+
 
 func main() {
 	prog := LoadIntProg(os.Args[1])
@@ -233,17 +300,22 @@ func main() {
 			}
 		}
 	}
-
 	fmt.Println("Result1:", sum)
 
-	fmt.Println("Steps:", Follow(m, curp))
+	steps := Follow(m, curp)
+	fmt.Println("Steps:", steps)
 
-	main := "B,A,B,C,B,A,C,A,C,A\n"
-	A := "R,8,L,12,R,4,R,4\n"
-	B := "R,8,L,10,L,12,R,4\n"
-	C := "R,8,L,10,R,8\n"
+	main, A, B, C := steps.FindABC(20)
 
-	payload := main + A + B + C + "n\n"
+	fmt.Println("Main:", main, "\nA:", A, "\nB:", B, "\nC:", C)
+	
+	//By Hand version:
+	//main := "B,A,B,C,B,A,C,A,C,A\n"
+	//A := "R,8,L,12,R,4,R,4\n"
+	//B := "R,8,L,10,L,12,R,4\n"
+	//C := "R,8,L,10,R,8\n"
+
+	payload := main + "\n" + A + "\n" + B + "\n" + C + "\nn\n"
 
 	prog2 := prog.Clone()
 	prog2[0] = 2
