@@ -4,9 +4,9 @@ import (
 	. "./intcode"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
-	"sort"
 )
 
 type Rotation int
@@ -180,21 +180,20 @@ func Follow(m Map, curp Pair) Steps {
 	return steps
 }
 
-
 func buildWin(steps Steps, offset int, maxLen int, maxSLen int) Steps {
 	win := make(Steps, 0)
 	size := 0
-	for i := offset; i < len(steps); i ++{
+	for i := offset; i < len(steps); i++ {
 		s := steps[i]
-		if len(win) < maxLen && size + 1 + len(s.String()) < maxSLen {
+		if len(win) < maxLen && size+1+len(s.String()) < maxSLen {
 			win = append(win, s)
-			size = len(win.String()) 
+			size = len(win.String())
 		} else {
 			break
 		}
 	}
-	return win 
-	
+	return win
+
 }
 
 func (steps Steps) FindABC(maxlen int) (string, string, string, string) {
@@ -202,19 +201,19 @@ func (steps Steps) FindABC(maxlen int) (string, string, string, string) {
 
 	// Let's create a pattern/occurence map
 	// (decreasing elem count, constant max pattern string length)
-	for max := len(steps); max > 1; max -- {
+	for max := len(steps); max > 1; max-- {
 		i := 0
 		for i < len(steps) {
-			w := buildWin(steps, i, max, maxlen + 1)
+			w := buildWin(steps, i, max, maxlen+1)
 			if len(w) == max {
 				m[w.String()] += 1
 			}
 			i += 1
 		}
 	}
-	
+
 	type Rec struct {
-		s string
+		s   string
 		cnt int
 	}
 
@@ -230,18 +229,18 @@ func (steps Steps) FindABC(maxlen int) (string, string, string, string) {
 
 	whole := steps.String()
 	minln := 999999
-	var mina, minb, minc Rec 
+	var mina, minb, minc Rec
 	var mincur string
 	// Check every combinations of A B C
-	for i := 0; i < len(c)-2; i ++ {
+	for i := 0; i < len(c)-2; i++ {
 		for j := i + 1; j < len(c)-1; j++ {
-			for k := j + 1; k < len(c); k ++ {
+			for k := j + 1; k < len(c); k++ {
 				cur := whole
 				a, b, c := c[i], c[j], c[k]
 				cur = strings.ReplaceAll(cur, a.s, "A")
 				cur = strings.ReplaceAll(cur, b.s, "B")
 				cur = strings.ReplaceAll(cur, c.s, "C")
-				// Replacing with winning a b c triplet should result in smallest main routine 
+				// Replacing with winning a b c triplet should result in smallest main routine
 				if minln > len(cur) {
 					minln = len(cur)
 					mina, minb, minc = a, b, c
@@ -253,7 +252,6 @@ func (steps Steps) FindABC(maxlen int) (string, string, string, string) {
 	// Let's hope for the best
 	return mincur, mina.s, minb.s, minc.s
 }
-
 
 func main() {
 	prog := LoadIntProg(os.Args[1])
@@ -308,7 +306,7 @@ func main() {
 	main, A, B, C := steps.FindABC(20)
 
 	fmt.Println("Main:", main, "\nA:", A, "\nB:", B, "\nC:", C)
-	
+
 	//By Hand version:
 	//main := "B,A,B,C,B,A,C,A,C,A\n"
 	//A := "R,8,L,12,R,4,R,4\n"
