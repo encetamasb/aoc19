@@ -90,15 +90,42 @@ func (m Map) Show() {
 	fmt.Println()
 }
 
-func (m Map) ShowPath(path []Pair) {
+func (m Map) ShowPath(level int, path []Triplet) {
+	fmt.Println("Level:", level)
 	visited := make(map[Pair]bool)
 	for i := 0; i < len(path); i++ {
-		visited[path[i]] = true
+		if path[i].level == level {
+			visited[Pair{path[i].x, path[i].y}] = true
+		}
 	}
 	fmt.Println()
 	for j := 0; j < m.H; j++ {
 		for i := 0; i < m.W; i++ {
 			pos := Pair{i, j}
+			_, exists := visited[pos]
+			if exists {
+				fmt.Print("@")
+			} else {
+				fmt.Print(m.At(pos, Nothing))
+			}
+		}
+		fmt.Println()
+	}
+	fmt.Println()
+}
+
+func (m Map) ShowPathAround(level int, path []Triplet, p Pair, w, h int) {
+	fmt.Println("Level:", level)
+	visited := make(map[Pair]bool)
+	for i := 0; i < len(path); i++ {
+		if path[i].level == level {
+			visited[Pair{path[i].x, path[i].y}] = true
+		}
+	}
+	fmt.Println()
+	for j := 0; j < h; j++ {
+		for i := 0; i < w; i++ {
+			pos := Pair{p.x + i - w/2, p.y + j - h/2}
 			_, exists := visited[pos]
 			if exists {
 				fmt.Print("@")
@@ -173,76 +200,112 @@ func (m Map) LabelToPos(label string) (Pair, bool) {
 	return Pair{}, false
 }
 
-func (m Map) MinPath(from, to string) ([]Pair, int) {
+type Triplet struct{ level, x, y int }
+
+func (m Map) MinPath(from, to string, recursive bool) ([]Triplet, int) {
 	start, ok := m.LabelToPos(from)
 	if !ok {
 		panic("ops")
 	}
+
 	end, ok := m.LabelToPos(to)
 	if !ok {
 		panic("ops")
 	}
-	fmt.Println(start, end)
-	path := make([]Pair, 0)
 
 	type Rec struct {
-		p    Pair
-		dist int
-		from *Rec
+		p     Pair
+		level int
+		dist  int
+		from  *Rec
 	}
 
-	visited := make(map[Pair]*Rec)
+	visited := make(map[Triplet]*Rec)
+	toPath := func(cur *Rec) []Triplet {
+		path := make([]Triplet, 0)
+		for cur != nil {
+			path = append(path, Triplet{cur.level, cur.p.x, cur.p.y})
+			cur = cur.from
+		}
+		return path
+	}
 
 	q := make([]*Rec, 0)
-	q = append(q, &Rec{start, 0, nil})
+	q = append(q, &Rec{start, 0, 0, nil})
 
 	for len(q) > 0 {
 		rec := q[0]
 		q = q[1:]
 
-		prev, exists := visited[rec.p]
+		if recursive {
+			//m.ShowPathAround(rec.level, toPath(rec), rec.p, 15, 15)
+			//var input string
+			//fmt.Scanln(&input)
+		}
+
+		prev, exists := visited[Triplet{rec.level, rec.p.x, rec.p.y}]
 		if exists {
 			if prev.dist > rec.dist {
-				visited[rec.p] = rec
+				visited[Triplet{rec.level, rec.p.x, rec.p.y}] = rec
 			} else {
 				continue
 			}
 		} else {
-			visited[rec.p] = rec
+			visited[Triplet{rec.level, rec.p.x, rec.p.y}] = rec
 		}
 
 		for i := 0; i < 4; i++ {
 			nextp := rec.p.NextTo(Dir(i))
 			f := m.At(nextp, Wall)
 			if f == Empty {
-				q = append(q, &Rec{nextp, rec.dist + 1, rec})
+				q = append(q, &Rec{nextp, rec.level, rec.dist + 1, rec})
 			} else if f.IsLabel() && !m.At(rec.p, Nothing).IsLabel() {
-				nextp, exists := m.Portals[rec.p]
-				if exists {
-					q = append(q, &Rec{nextp, rec.dist + 1, rec})
+				inner := rec.p.x > 5 && rec.p.x < m.W-5 && rec.p.y > 5 && rec.p.y < m.H-5
+				if !recursive {
+					nextp, exists := m.Portals[rec.p]
+					if exists {
+						q = append(q, &Rec{nextp, rec.level, rec.dist + 1, rec})
+					}
+				} else {
+					if rec.level == 0 && !inner {
+						continue
+					}
+
+					if rec.level >= len(m.Portals)/2 {
+						continue
+					}
+
+					nextp, exists := m.Portals[rec.p]
+					if exists {
+						if inner {
+							q = append(q, &Rec{nextp, rec.level + 1, rec.dist + 1, rec})
+						} else {
+							q = append(q, &Rec{nextp, rec.level - 1, rec.dist + 1, rec})
+						}
+					}
 				}
 			}
 
 		}
 	}
 
-	cur := visited[end]
-	for cur != nil {
-		path = append(path, cur.p)
-		cur = cur.from
-	}
-
-	return path, visited[end].dist
+	cur := visited[Triplet{0, end.x, end.y}]
+	dist := cur.dist
+	path := toPath(cur)
+	return path, dist
 }
 
 func main() {
 	m := LoadMap(os.Args[1])
-	m.Show()
+	// m.Show()
 
 	fmt.Println(m.Labels)
 	fmt.Println(m.Portals)
 
-	path, min := m.MinPath("AA", "ZZ")
-	m.ShowPath(path)
+	path, min := m.MinPath("AA", "ZZ", false)
+	m.ShowPath(0, path)
 	fmt.Println("Result1:", min)
+
+	path, min = m.MinPath("AA", "ZZ", true)
+	fmt.Println("Result2:", min)
 }
